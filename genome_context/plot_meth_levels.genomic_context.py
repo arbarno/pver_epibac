@@ -26,7 +26,7 @@ def define_genomic_feature(descriptor):
     else:
         return 'intergenic'
 
-data = pd.read_table('/ibex/project/c2208/epibac_methylseqs/noe3/all.merged.filt.annot.noe3.cov', header=None,
+data = pd.read_table('all.filt.annot.merged.cov', header=None,
                      usecols=[3, 6, 10],
                      names=['meth_pct', 'gene', 'ei'])
 
@@ -65,5 +65,5 @@ plt.legend(loc='upper center', ncol=3, frameon=True)
 fig = plt.gcf()
 
 # without bbox_inches, the saved figure has truncated axes.
-output_filename = 'meth_levels.noe3.genomic_context.pdf'
+output_filename = 'meth_levels_genomic_context.pdf'
 fig.savefig(output_filename, bbox_inches='tight')

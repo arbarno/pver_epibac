@@ -4,7 +4,7 @@ Scripts and important data for "Bacterial inoculation elicits changes to the cor
 ## Methylation analysis
 This repository contains the scripts (or references to scripts) and input files used for analyzing the epigenetic response of *Pocillopora verrucosa* to bacteria inoculation and heat stress in the paper "Bacterial inoculation elicits changes to the coral epigenome"
 
-The methylation pipeline used to process samples to this point can be found at https://github.com/lyijin/working_with_dna_meth (which also fuller descriptions + theoretical considerations of the pipeline, and the scripts written to operate on Bismark's output)
+The methylation pipeline used to process samples to this point can be found at https://github.com/lyijin/working_with_dna_meth (which also contains fuller descriptions + theoretical considerations of the pipeline, and the scripts written to operate on Bismark's output)
 
 ### The files in the main repository (and how they were obtained):
 - `all.filt.annot.merged.cov.gz`

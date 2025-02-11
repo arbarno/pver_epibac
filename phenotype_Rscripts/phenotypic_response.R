@@ -1,6 +1,6 @@
 #### Analysis of phenotypic responses of P. verrucosa in reponse to heat stress and bacterial inoculation ####
     
-## PAM analysis ----
+## PAM analysis
 
 pam<-read.csv("pam_timepoints.csv", header=TRUE)
 
@@ -30,9 +30,7 @@ kruskal.test(pam.a$t2, pam.a$inoculation) # Kruskal-Wallis chi-squared = 4.8673,
 kruskal.test(pam.h$t1, pam.h$inoculation) # Kruskal-Wallis chi-squared = 2.3382, df = 3, p-value = 0.5052
 kruskal.test(pam.h$t2, pam.h$inoculation) # Kruskal-Wallis chi-squared = 3.9709, df = 3, p-value = 0.2646
 
-#
-
-## Nubbin picture analysis ----
+## Nubbin picture analysis
 
 library(ggplot2)
 library(dplyr)

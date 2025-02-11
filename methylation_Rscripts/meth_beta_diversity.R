@@ -7,7 +7,7 @@ library(tibble)
 library(vegan)
 library(ggplot2)
 
-# read in median methylation tsv file to run PCA and correlation matrix
+# read in median methylation tsv file to run nMDS
 med.meths <- read.table("compiled_median_meths.tsv", sep = '\t', header = TRUE)
 
 # retain genes with >= 5 methylated positions and is methylated
@@ -76,7 +76,7 @@ anova(betadisper(dist.0, meth.group.0$treatment))
 pairwiseAdonis::pairwise.adonis(dist.0, meth.group.0$temperature, p.adjust.m = 'BH', perm = 1000)
 pairwiseAdonis::pairwise.adonis(dist.0, meth.group.0$treatment, p.adjust.m = 'BH', perm = 1000)
 
-#avg distance to group centroids
+# distance between centroids
 usedist::dist_between_centroids(dist.1,1:15, 16:29) #1:15 = A, 16:29 = H, value = [1] 0.02916496
 usedist::dist_between_centroids(dist.2,1:16, 17:31) #1:16 = A, 17:31 = H, value = [1] 0.0221721
 

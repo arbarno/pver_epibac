@@ -1,6 +1,4 @@
-#### Analysis of phenotypic responses and methylation data ####
-
-## Diversity metrics ----
+## Beta diversity of median methylation levels in samples ##
 
 library(dplyr)
 library(tibble)

@@ -8,6 +8,6 @@ The methylation pipeline used to process samples to this point can be found at h
 
 ### The files in the main repository (and how they were obtained):
 - `all.filt.annot.merged.cov.gz`
- - Methylated positions were called, filtered, and merged across all samples (explained at https://github.com/lyijin/working_with_dna_meth)
+  - Methylated positions were called, filtered, and merged across all samples (explained at https://github.com/lyijin/working_with_dna_meth)
 - `compiled_median_meths.tsv.gz`
- - Median methylation levels were calculated on the gene level for each of the samples and compiled (explained at https://github.com/lyijin/spis_dna_meth/tree/master/bias_density_medians)
+  - Median methylation levels were calculated on the gene level for each of the samples and compiled (explained at https://github.com/lyijin/spis_dna_meth/tree/master/bias_density_medians)

@@ -1,4 +1,4 @@
-#### Analysis of phenotypic responses and methylation data ####
+#### Analysis of phenotypic responses of P. verrucosa in reponse to heat stress and bacterial inoculation ####
     
 ## PAM analysis ----
 

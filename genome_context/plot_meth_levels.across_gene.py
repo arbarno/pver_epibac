@@ -75,7 +75,7 @@ def get_starting_loc(feature):
         raise ValueError('feature has an unexpected value!')
 
 # read the cov file
-data = pd.read_table('/ibex/project/c2208/epibac_methylseqs/noe3/all.merged.filt.annot.noe3.cov', header=None,
+data = pd.read_table('all.filt.annot.merged.cov', header=None,
                      names=['scaf', 'start_pos', 'end_pos', 'meth_pct', 
                             'meth', 'unmeth', 'gene', 'gene_relpos',
                             'gene_5p', 'gene_3p', 'ei', 'ei_relpos', 
@@ -224,5 +224,5 @@ sns.despine(offset=10, bottom=True, trim=True)
 fig = plt.gcf()
 
 # without bbox_inches, the saved figure has truncated axes.
-output_filename = 'meth_levels.noe3.across_gene.pdf'
+output_filename = 'meth_levels_across_gene.pdf'
 fig.savefig(output_filename, bbox_inches='tight')

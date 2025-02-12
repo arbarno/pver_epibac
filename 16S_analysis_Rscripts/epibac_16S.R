@@ -216,216 +216,50 @@ n
 
 ggsave("top20_families.pdf", plot = n, height = 6, width = 9)
 
--------------------------------------------------------------------------------------------------------------------
-
 ## Beta diversity
 
-# Now we want to check the beta diversity by making a nMDS or PCoA (Eslam did PCoA), and run some tests.
+# Check the beta diversity by making a PCoA comparing bacterial communities between experimental groups.
 
-# first load the ggplot2 library
 library(ggplot2)
 
 # we can just use a subset of the samples so that we don't clog the plot
-phy.t0 = subset_samples(phy, timepoint == "T0")
-#phy.t0 = subset_samples(phy.t0, sample != "H12")
+phy.t0 = subset_samples(phy, timepoint == "T0") # substitute for t0/t1/t2
 
-phy.t1 = subset_samples(phy, timepoint == "T1")
-
-phy.t2 = subset_samples(phy, timepoint == "T2")
-
-# this is to normalize the abundances of the samples (here used as a percent)
-phy.t0.norm = transform_sample_counts(phy.t0, function(x) 100 * x/sum(x))
-phy.t1.norm = transform_sample_counts(phy.t1, function(x) 100 * x/sum(x))
-phy.t2.norm = transform_sample_counts(phy.t2, function(x) 100 * x/sum(x))
+# this is to normalize the abundances of the samples
+phy.t0.norm = transform_sample_counts(phy.t0, function(x) 100 * x/sum(x)) # substitute for t0/t1/t2
 
 # calculate the distance matrix
-phy.dist.t0 = phyloseq::distance(phy.t0.norm, method="bray")
-phy.dist.t1 = phyloseq::distance(phy.t1.norm, method="bray")
-phy.dist.t2 = phyloseq::distance(phy.t2.norm, method="bray")
+phy.dist.t0 = phyloseq::distance(phy.t0.norm, method="bray") # substitute for t0/t1/t2
 
-# calculate the ordination (using NMDS, PCoA, PCA) using distance (bray, euclidean)
-ord0 <- ordinate(phy.t0.norm, method="PCoA", distance=phy.dist.t0)
-ord1 <- ordinate(phy.t1.norm, method="PCoA", distance=phy.dist.t1)
-ord2 <- ordinate(phy.t2.norm, method="PCoA", distance=phy.dist.t2)
+# calculate the ordination (PCoA) using distance (from bray)
+ord0 <- ordinate(phy.t0.norm, method="PCoA", distance=phy.dist.t0) # substitute for t0/t1/t2
 
 # see the eigen value of the axes
-plot_scree(ord0)
-plot_scree(ord1)
-plot_scree(ord2)
+plot_scree(ord0) # substitute for t0/t1/t2
 
 # plot
-p <- plot_ordination(phy.t2.norm, ord2, color = "temp", shape = "treatment")+
-  #facet_wrap('timepoint', nrow = 1, ncol = 3, scales = 'free') +
+p <- plot_ordination(phy.t0.norm, ord2, color = "temp", shape = "treatment")+
   geom_point(size=2, alpha=0.8)+
-  #scale_shape_manual(values=c(15, 16, 17,18))+
   theme_bw()+
-  #scale_color_manual(values = c('#d7191c','#fdae61','#abdda4','#2b83ba'))+
-  stat_ellipse(aes(color=phy.t2.norm@sam_data[["temp"]], group = phy.t2.norm@sam_data[["temp"]]))
+  stat_ellipse(aes(color=phy.t0.norm@sam_data[["temp"]], group = phy.02.norm@sam_data[["temp"]]))
 p
 
 # calculate the beta diversity
 library(vegan)
-adonis2(phy.dist.t0 ~ sample_data(phy.t0.norm)$temp * sample_data(phy.t0.norm)$treatment, permutations = 1000)
-adonis2(phy.dist.t1 ~ sample_data(phy.t1.norm)$temp * sample_data(phy.t1.norm)$treatment, permutations = 1000)
-adonis2(phy.dist.t2 ~ sample_data(phy.t2.norm)$temp * sample_data(phy.t2.norm)$treatment, permutations = 1000)
+adonis2(phy.dist.t0 ~ sample_data(phy.t0.norm)$temp * sample_data(phy.t0.norm)$treatment, permutations = 1000) # substitute for t0/t1/t2
 
 # run pairwise adonis on all the combinations to see which groups are different from each other
-anova(betadisper(phy.dist.t0, sample_data(phy.t0.norm)$temp))
-pairwiseAdonis::pairwise.adonis(phy.dist.t0, sample_data(phy.t0.norm)$group, perm = 1000, p.adjust.m = 'BH')
+anova(betadisper(phy.dist.t0, sample_data(phy.t0.norm)$temp)) # substitute for t0/t1/t2
+pairwiseAdonis::pairwise.adonis(phy.dist.t0, sample_data(phy.t0.norm)$group, perm = 1000, p.adjust.m = 'BH') # substitute for t0/t1/t2
 
-anova(betadisper(phy.dist.t1, sample_data(phy.t1.norm)$temp))
-pairwiseAdonis::pairwise.adonis(phy.dist.t1, sample_data(phy.t1.norm)$group, perm = 1000, p.adjust.m = 'BH')
-
-anova(betadisper(phy.dist.t2, sample_data(phy.t2.norm)$temp))
-pairwiseAdonis::pairwise.adonis(phy.dist.t2, sample_data(phy.t2.norm)$group, perm = 1000, p.adjust.m = 'BH')
-
-    ## OTU differential abundance testing with edgeR ----
-
-library(edgeR)
-
-phy.trans = transform_sample_counts(phy, function(x){x/sum(x)})
-hist(log10(apply(otu_table(phy.trans), 2, var)),
-     xlab="log10(variance)", breaks=50)
-#we will set up a variance threshold to remove large fraction of OTUs with low variance
-#Here we’ve used an arbitrary but not-unreasonable variance threshold of 10-5. 
-#It is important to keep in mind that this filtering is independent of our downstream test. 
-#The sample classifications were not used.
-varianceThreshold = 1e-5
-keepOTUs = names(which(apply(otu_table(phy.trans), 2, var) > varianceThreshold))
-phy = prune_taxa(keepOTUs, phy)
-phy
-head(otu_table(phy))
-
-# create function phyloseq to edgeR
-
-phyloseq_to_edgeR = function(physeq, group, method="RLE", ...){
-  require("edgeR")
-  require("phyloseq")
-  # Enforce orientation.
-  if( !taxa_are_rows(physeq) ){ physeq <- t(physeq) }
-  x = as(otu_table(physeq), "matrix")
-  # Add one to protect against overflow, log(0) issues.
-  x = x + 1
-  # Check `group` argument
-  if( identical(all.equal(length(group), 1), TRUE) & nsamples(physeq) > 1 ){
-    # Assume that group was a sample variable name (must be categorical)
-    group = get_variable(physeq, group)
-  }
-  # Define gene annotations (`genes`) as tax_table
-  taxonomy = tax_table(physeq, errorIfNULL=FALSE)
-  if( !is.null(taxonomy) ){
-    taxonomy = data.frame(as(taxonomy, "matrix"))
-  } 
-  # Now turn into a DGEList
-  y = DGEList(counts=x, group=group, genes=taxonomy, remove.zeros = TRUE, ...)
-  # Calculate the normalization factors
-  z = calcNormFactors(y, method=method)
-  # Check for division by zero inside `calcNormFactors`
-  if( !all(is.finite(z$samples$norm.factors)) ){
-    stop("Something wrong with edgeR::calcNormFactors on this data,
-         non-finite $norm.factors, consider changing `method` argument")
-  }
-  # Estimate dispersions
-  return(estimateTagwiseDisp(estimateCommonDisp(z)))
-}
-
-    ## edgeR ----
-
-# subset all the combos to get the pairwise edgeRs
-#phy.t1.actrl.abmc = subset_samples(phy, timepoint == "T1" & treatment %in% c("ACTRL", "ABMC"))
-#phy.t1.actrl.apath = subset_samples(phy, timepoint == "T1" & treatment %in% c("ACTRL", "ABMC"))
-#phy.t1.actrl.aboth = subset_samples(phy, timepoint == "T1" & treatment %in% c("ACTRL", "ABMC"))
-#phy.t1.actrl.hctrl = subset_samples(phy, timepoint == "T1" & treatment %in% c("ACTRL", "ABMC"))
-#phy.t1.actrl.hbmc = subset_samples(phy, timepoint == "T1" & treatment %in% c("ACTRL", "ABMC"))
-phy.t2.hctrl.hbmc = subset_samples(phy, timepoint == "T2" & group %in% c("T2_HCTRL", "T2_HBMC"))
-#I think no genes with qualifying differential abundances
-phy.t2.hctrl.hpath = subset_samples(phy, timepoint == "T2" & group %in% c("T2_HCTRL", "T2_HPATH"))
-phy.t2.hctrl.hboth = subset_samples(phy, timepoint == "T2" & group %in% c("T2_HCTRL", "T2_HBOTH"))
-phy.t2.hbmc.hpath = subset_samples(phy, timepoint == "T2" & group %in% c("T2_HBMC", "T2_HPATH"))
-phy.t2.hbmc.hboth = subset_samples(phy, timepoint == "T2" & group %in% c("T2_HBMC", "T2_HBOTH"))
-phy.t2.hpath.hboth = subset_samples(phy, timepoint == "T2" & group %in% c("T2_HPATH", "T2_HBOTH"))
-
-phy.t2.temp = subset_samples(phy, timepoint == "T2")
-
-# Now let’s use our newly-defined function to convert the phyloseq data object phyloseq_transformed2 into an edgeR “DGE” data object, called dge.
-dge.t2.temp = phyloseq_to_edgeR(phy.t2.temp, group="group")
-
-# Perform binary test
-et = exactTest(dge.t2.temp)
-
-# Extract values from test results
-tt = topTags(et, n=nrow(dge.t2.temp$table), adjust.method="BH", sort.by="PValue")
-res = tt@.Data[[1]]
-alpha = 0.001
-sigtab = res[(res$FDR < alpha), ]
-sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(phy.t2.temp)[rownames(sigtab), ], "matrix")) 
-# Error in dimnames(x) <- dn : 
-# length of 'dimnames' [1] not equal to array extent
-dim(sigtab)
-#[1]
-head(sigtab)
-write.csv(sigtab, file = "table_foldchange_t2_temp.csv", na = "NA") 
-
-    ## Fold-change barplots ----
-
-# plot Here is a bar plot showing the log-fold-change, showing Genus and Phylum. Uses some ggplot2 commands.
-fcp <- read.delim('foldchange_t2.txt', stringsAsFactors=F)
-
-colours <- c("#FFA8BB","#426600","#FF0010","#5EF1F2","#00998F","#740AFF","#990000","#FF8000", "#993F00","#4C005C","#2BCE48",
-              "#808080", "#0075DC","#FFCC99","#F0A3FF","#94FFB5","#8F7C00","#9DCC00","#C20088","#003380","#FFA405",
-             "#E495A5", "#ABB065", "#39BEB1", "#ACA4E2", "#009999")
-
-p<-ggplot(
-  data = fcp,
-  aes(x = comparison, y = logFC, group = reorder(row.names(fcp), as.numeric(genus)))) + 
-  geom_bar(stat = "identity", aes(fill = genus), position = position_dodge(preserve = "single")) +
-  scale_fill_manual(values = colours) +
-  ylab("Log Fold Change") + 
-  coord_flip()
-p
-
-    ## Indicspecies ----
-
-library(indicspecies)
-library(stats)
-
-# the data should be the same as above, but if not there, run command
-dat.piv <- read.delim('genus_counts_nosingle_nochlor_nomito.txt', stringsAsFactors=F)
-
-ind.sp = subset(dat.piv, timepoint == 'T1' & temp == 'H')
-ind.sp.abund = ind.sp[,6:ncol(ind.sp)]
-treat = ind.sp$treatment
-
-# comparing GROUPS of potential indicators instead of individual species
-#ind.sp.combo = combinespecies(ind.sp)
-#dim(ind.sp.combo)
-#indvalspcomb = multipatt(ind.sp.combo, groups, duleg = TRUE, control = how(nperm=999))
-#summary(indvalspcomb, indvalcomp = TRUE)
-#p.adjust(c$p, method = "BH")
-
-library(data.table)
-indisp<- multipatt(ind.sp.abund, treat, duleg = TRUE, func = "r.g", control = how(nperm=1000))
-#extract table of stats
-indisp.sign<-as.data.table(indisp$sign, keep.rownames=TRUE)
-#add adjusted p-value
-indisp.sign[ ,p.value.bh:=p.adjust(p.value, method="BH")]
-#now can select only the indicators with adjusted significant p-values
-indtable <- indisp.sign[p.value.bh<=0.05 & stat>=0.75, ]
-
-write.csv(indtable, file = "indicator_species_t1h.csv", na = "NA")  #export table
-
-    ## multi_boxplot_w/_inoculums ----
+## Multi boxplot showing the relative abundances of the incoulated bacteria
 
 # to do relative abundance (out of 100%), we need to also transform the counts to percents
 phy.rel <- transform_sample_counts(phy, function(otu) 100 * otu/sum(otu))
 
-#phy.rel.rueg <- subset_taxa(phy.rel, genus == "g_Ruegeria")
-#phy.rel.inoc <- subset_taxa(phy.rel, genus == "g_Cobetia" | genus == "g_Vibrio")
-#phy.rel.inoc <- subset_taxa(phy.rel, family == "f_Endozoicomonadaceae")
-
 Taxa = c("ASV176", "ASV319")
-# "ASV36", "ASV37", "ASV57" vibrio
-# "ASV176", "ASV319" cobetia
+# "ASV36", "ASV37", "ASV57" # V. coralliilyticus ASVs with 100% identity to inoculated bacteria
+# "ASV176", "ASV319" # Cobetia. sp ASVs with 100% identity to inoculated bacteria
 allTaxa = taxa_names(phy.rel)
 myTaxa <- allTaxa[(allTaxa %in% Taxa)]
 phy.rel.inoc = prune_taxa(myTaxa, phy.rel)
@@ -434,72 +268,29 @@ phy.rel.inoc<-tax_glom(phy.rel.inoc, "genus", NArm = FALSE)
 
 phy.reldf.inoc<-psmelt(phy.rel.inoc)
 
-phy.reldf.inoc<-phy.reldf.inoc %>%
-  filter(., timepoint != "T2")
+phy.reldf.inoc<-phy.reldf.inoc
 
 # plot the boxplot
 q<-ggplot(phy.reldf.inoc,aes(x=group, fill = genus, y=Abundance))+
   geom_boxplot(aes(fill=genus), outlier.shape = NA) +
-  #scale_fill_manual(values=c("plum")) +
   geom_point(size=0.8,position=position_dodge(width=0.75)) +
   facet_wrap(~timepoint, scales = "free_x") +
   theme_bw()+
   theme(axis.text.x=element_text(angle = 45, vjust = 1, hjust = 1))
-  #scale_y_continuous(name="Abundance (%)", limits=c(0,4), breaks = seq(0,4,1))
 q
 
 # we can just use a subset of the samples so we can do stats within timepoints
-phy.t0.rel.vib = subset_samples(phy.rel.inoc, timepoint == "T0")
-phy.t0.rel.vib = subset_taxa(phy.t0.rel.vib, genus == "g_Vibrio")
-phy.t0.rel.vib.a = subset_samples(phy.t0.rel.vib, temp == "A")
-phy.t0.rel.vib.h = subset_samples(phy.t0.rel.vib, temp == "H")
-phy.t1.rel.vib = subset_samples(phy.rel.inoc, timepoint == "T1")
-phy.t1.rel.vib = subset_taxa(phy.t1.rel.vib, genus == "g_Vibrio")
-phy.t1.rel.vib.a = subset_samples(phy.t1.rel.vib, temp == "A")
-phy.t1.rel.vib.h = subset_samples(phy.t1.rel.vib, temp == "H")
-phy.t2.rel.vib = subset_samples(phy.rel.inoc, timepoint == "T2")
-phy.t2.rel.vib = subset_taxa(phy.t2.rel.vib, genus == "g_Vibrio")
-phy.t2.rel.vib.a = subset_samples(phy.t2.rel.vib, temp == "A")
-phy.t2.rel.vib.h = subset_samples(phy.t2.rel.vib, temp == "H")
+phy.rel.inoc.1 = subset_samples(phy.rel.inoc, timepoint == "T0") # substitute for t0/t1/t2
+phy.rel.inoc.1 = subset_taxa(phy.rel.inoc.1, genus == "g_Vibrio") # substitute for Vibrio/Cobetia
+phy.rel.inoc.1a = subset_samples(phy.rel.inoc.1, temp == "A") # substitute for ambient/heat-stressed
 
-phy.t0.reldf.vib<-psmelt(phy.t0.rel.vib)
-phy.t0.reldf.vib.a<-psmelt(phy.t0.rel.vib.a)
-phy.t0.reldf.vib.h<-psmelt(phy.t0.rel.vib.h)
-phy.t1.reldf.vib<-psmelt(phy.t1.rel.vib)
-phy.t1.reldf.vib.a<-psmelt(phy.t1.rel.vib.a)
-phy.t1.reldf.vib.h<-psmelt(phy.t1.rel.vib.h)
-phy.t2.reldf.vib<-psmelt(phy.t2.rel.vib)
-phy.t2.reldf.vib.a<-psmelt(phy.t2.rel.vib.a)
-phy.t2.reldf.vib.h<-psmelt(phy.t2.rel.vib.h)
+# convert to data frame
+phy.reldf.inoc.1<-psmelt(phy.rel.inoc.1a)
 
-# we can just use a subset of the samples so we can do stats within timepoints
-phy.t0.rel.cob = subset_samples(phy.rel.inoc, timepoint == "T0")
-phy.t0.rel.cob = subset_taxa(phy.t0.rel.cob, genus == "g_Cobetia")
-phy.t0.rel.cob.a = subset_samples(phy.t0.rel.cob, temp == "A")
-phy.t0.rel.cob.h = subset_samples(phy.t0.rel.cob, temp == "H")
-phy.t1.rel.cob = subset_samples(phy.rel.inoc, timepoint == "T1")
-phy.t1.rel.cob = subset_taxa(phy.t1.rel.cob, genus == "g_Cobetia")
-phy.t1.rel.cob.a = subset_samples(phy.t1.rel.cob, temp == "A")
-phy.t1.rel.cob.h = subset_samples(phy.t1.rel.cob, temp == "H")
-phy.t2.rel.cob = subset_samples(phy.rel.inoc, timepoint == "T2")
-phy.t2.rel.cob = subset_taxa(phy.t2.rel.cob, genus == "g_Cobetia")
-phy.t2.rel.cob.a = subset_samples(phy.t2.rel.cob, temp == "A")
-phy.t2.rel.cob.h = subset_samples(phy.t2.rel.cob, temp == "H")
+# testing for normality
+hist(phy.reldf.inoc.1<b$Abundance)
+shapiro.test(phy.reldf.inoc.1<$Abundance)
 
-phy.t0.reldf.cob<-psmelt(phy.t0.rel.cob)
-phy.t0.reldf.cob.a<-psmelt(phy.t0.rel.cob.a)
-phy.t0.reldf.cob.h<-psmelt(phy.t0.rel.cob.h)
-phy.t1.reldf.cob<-psmelt(phy.t1.rel.cob)
-phy.t1.reldf.cob.a<-psmelt(phy.t1.rel.cob.a)
-phy.t1.reldf.cob.h<-psmelt(phy.t1.rel.cob.h)
-phy.t2.reldf.cob<-psmelt(phy.t2.rel.cob)
-phy.t2.reldf.cob.a<-psmelt(phy.t2.rel.cob.a)
-phy.t2.reldf.cob.h<-psmelt(phy.t2.rel.cob.h)
-
-# statistics within each timepoint
-hist(phy.t1.reldf.vib$Abundance)
-shapiro.test(phy.t1.reldf.vib$Abundance) # p>0.05 is normal, can run anova
-
-kruskal.test(phy.t0.reldf.cob.h$Abundance,phy.t0.reldf.cob.h$treatment) # for non-normal data
-FSA::dunnTest(phy.t0.reldf.cob.h$Abundance~phy.t0.reldf.cob.h$treatment, data = phy.t0.reldf.cob.h, method='bh')
-#pairwise.wilcox.test(phy.t2.reldf.vib$Abundance,phy.t2.reldf.vib$treatment, p.adj='fdr')
+# significance testing
+kruskal.test(phy.reldf.inoc.1$Abundance,phy.reldf.inoc.1$treatment)
+FSA::dunnTest(phy.reldf.inoc.1$Abundance~phy.reldf.inoc.1$treatment, data = phy.reldf.inoc.1, method='bh')

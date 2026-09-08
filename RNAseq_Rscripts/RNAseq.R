@@ -39,7 +39,7 @@ s2c$inoculation <- relevel(s2c$inoculation, ref = "ctrl")
 # (2) estimate parameters for the sleuth response error measurement (full) model 
 # (3) estimate parameters for the sleuth reduced model, and (4) perform differential analysis (testing). 
 # On a laptop the four steps should take about a few minutes altogether.
-so <- sleuth_prep(s2c, ~temperature + inoculation, target_mapping = t2g, aggregation_column = 'ens_gene', extra_bootstrap_summary = TRUE,
+so <- sleuth_prep(s2c, ~temperature * inoculation, target_mapping = t2g, aggregation_column = 'ens_gene', extra_bootstrap_summary = TRUE,
                   read_bootstrap_tpm = TRUE, transform_fun_counts = function(x) log2(x + 1), )
 
 # set up the PC values so the plot shows the percents alongside the "PC1"/"PC2"
@@ -66,19 +66,63 @@ plot_pca(so, units = "tpm", color_by = 'group', point_size = 5, point_alpha = 1)
 
 # calculate the beta diversity
 library(vegan)
-adonis2(so ~ temperature + inoculation, permutations = 1000)
+
+abund.matrix <- sleuth:::spread_abundance_by(so$obs_norm_filt, "tpm", so$sample_to_covariates$sample)
+abund.matrix <- t(abund.matrix)
+meta <- so[["sample_to_covariates"]]
+
+adonis2(dist.matrix ~ temperature * inoculation, data = meta, permutations = 1000, by = "term")
+# Permutation test for adonis under reduced model
+# Terms added sequentially (first to last)
+# Permutation: free
+# Number of permutations: 1000
+# 
+# adonis2(formula = abund.matrix ~ temperature * inoculation, data = meta, permutations = 1000, by = "term")
+#                           Df SumOfSqs      R2       F   Pr(>F)    
+# temperature                1  0.11842 0.32069 20.6739 0.000999 ***
+# inoculation                3  0.05638 0.15268  3.2809 0.000999 ***
+# temperature:inoculation    3  0.05699 0.15434  3.3166 0.002997 ** 
+# Residual                  24  0.13747 0.37229                     
+# Total                     31  0.36925 1.00000                     
 
 # run pairwise adonis on all the combinations to see which groups are different from each other
-anova(betadisper(so, inoculation))
-pairwiseAdonis::pairwise.adonis(so, inoculation, perm = 1000, p.adjust.m = 'BH')
+dist.matrix <- vegdist(abund.matrix, method = "bray")
+anova(betadisper(dist.matrix, meta$inoculation))
+pairwiseAdonis::pairwise.adonis(dist.matrix, meta$inoculation, perm = 1000, p.adjust.m = 'BH')
+# no pairwise comparisons were significant!
 
-#quality control metrics can also be examined. The count distributions for each group can be displayed
+#quality control metrics to visualize the count distributions
 plot_group_density(so, use_filtered = TRUE, units = "tpm",
-                   trans = "log", grouping = setdiff(colnames(so$sample_to_covariates),
-                                                     "sample"), offset = 1)
+                   trans = "log", grouping = setdiff(colnames(so$sample_to_covariates), "sample"), offset = 1)
 
 # we can do a full sleuth fit model with both temperature and inoculation as factors
-so <- sleuth_fit(so, ~temperature + inoculation, 'full', which_var = 'obs_counts')
+so <- sleuth_fit(so, ~temperature * inoculation, 'full', which_var = 'obs_counts')
+
+# next, we fit the reduced model with just the temperature
+so <- sleuth_fit(so, ~temperature, 'no_inoc', which_var = 'obs_counts') # test for main effect of inoc
+so <- sleuth_fit(so, ~inoculation, 'no_temp', which_var = 'obs_counts') # test for main effect of temp
+so <- sleuth_fit(so, ~temperature + inoculation, 'no_interact', which_var = 'obs_counts') # test if inoc depends on temp
+
+# and finally perform the tests
+# by doing this, we will statistically test for genes affect by inoculation, while controlling for differences in temperature
+# this will identify genes whose abundances are significantly better explained when inoculation is taken into account
+so <- sleuth_lrt(so, 'no_inoc', 'full') # test effect of inoc
+so <- sleuth_lrt(so, 'no_temp', 'full') # test effect of temp
+so <- sleuth_lrt(so, 'no_interact', 'full') # test effect of interaction              
+
+# In general, we can test models that are nested using the likelihood ratio test. 
+# Viewing models which have been fit can be done using the models() function.
+models(so)
+
+# get the number of genes affected by each
+lrt_inoc <- sleuth_results(so, 'no_inoc:full', 'lrt', show_all = FALSE, pval_aggregate = FALSE)
+lrt_temp <- sleuth_results(so, 'no_temp:full', 'lrt', show_all = FALSE, pval_aggregate = FALSE)
+lrt_interact <- sleuth_results(so, 'no_interact:full', 'lrt', show_all = FALSE, pval_aggregate = FALSE)
+
+# How many genes are broadly significant for each?
+sum(lrt_inoc$qval < 0.05, na.rm = TRUE) # 5255 genes
+sum(lrt_temp$qval < 0.05, na.rm = TRUE) # 12165 genes
+sum(lrt_interact$qval < 0.05, na.rm = TRUE) # 3690 genes
 
 library(tibble)
 library(tidyr)
@@ -119,9 +163,182 @@ plot(as.dendrogram(hc))
 
 # Get the range of the heights
 height_range <- range(hc$height)
+# Plot the column dendrogram
+plot(hc, main = "", xlab = "", sub = "", hang = -1)
+plot(as.dendrogram(hc),horiz=T)
+# Get the range of the heights
+height_range <- range(hc$height)
 
 #
 
+## Get contrasts between all groups (up or down regulated)
+
+#library(sleuth)
+
+# The unique pairwise inoculation comparisons you actually need
+# ref=ctrl -> bmc_vs_ctrl, path_vs_ctrl, both_vs_ctrl
+# ref=bmc -> path_vs_bmc, both_vs_bmc (ctrl_vs_bmc is just bmc_vs_ctrl flipped)
+# ref=path -> both_vs_path (others already covered)
+# ref=both -> nothing new
+
+# So only run 3 reference levels, and filter to the new comparisons each time
+comparisons_per_ref <- list(
+  ctrl = c("inoculationbmc", "inoculationpath", "inoculationboth", "temperatureH",
+           "temperatureH:inoculationbmc", "temperatureH:inoculationpath", "temperatureH:inoculationboth"),
+  
+  bmc  = c("inoculationpath", "inoculationboth", "temperatureH:inoculationpath",
+           "temperatureH:inoculationboth"),
+  
+  path = c("inoculationboth",
+           "temperatureH:inoculationboth"))
+
+relevel_results <- list()
+
+for (ref in names(comparisons_per_ref)) {
+  
+  message("Running sleuth_prep with ref = ", ref)
+  s2c$inoculation <- relevel(factor(s2c$inoculation), ref = ref)
+  
+  so_tmp <- sleuth_prep(s2c, ~temperature * inoculation,
+                        target_mapping = t2g,
+                        aggregation_column = 'ens_gene',
+                        extra_bootstrap_summary = TRUE,
+                        read_bootstrap_tpm = TRUE,
+                        transform_fun_counts = function(x) log2(x + 1))
+  
+  so_tmp <- sleuth_fit(so_tmp, ~temperature * inoculation, 'full')
+  
+  for (coef in comparisons_per_ref[[ref]]) {
+    so_tmp <- sleuth_wt(so_tmp, which_beta = coef, which_model = 'full')
+    res    <- sleuth_results(so_tmp, coef, which_model = 'full', show_all = FALSE, pval_aggregate = FALSE)
+    key    <- paste0("ref_", ref, "__", coef)
+    relevel_results[[key]] <- res
+  }
+  
+  rm(so_tmp); gc()
+}
+
+# Save all
+for (nm in names(relevel_results)) {
+  write.csv(relevel_results[[nm]], 
+            file = paste0("DE_", nm, ".csv"), 
+            row.names = FALSE)
+}
+
+# Helper to count sig DEGs from relevel_results format
+count_deg_relevel <- function(tbl) {
+  tbl %>% 
+    filter(!is.na(qval), qval <= 0.05, abs(b) > 1) %>% 
+    nrow()
+}
+
+# Build counts dataframe from relevel_results only
+deg.counts <- data.frame(
+  comparison = c(
+    # pairwise
+    "H_vs_A",
+    "bmc_vs_ctrl",
+    "path_vs_ctrl",
+    "both_vs_ctrl",
+    "path_vs_bmc",
+    "both_vs_bmc",
+    "both_vs_path",
+    # interactions
+    "interaction_bmc_vs_ctrl",
+    "interaction_path_vs_ctrl",
+    "interaction_both_vs_ctrl",
+    "interaction_path_vs_bmc",
+    "interaction_both_vs_bmc",
+    "interaction_both_vs_path"
+  ),
+  DEG_count = c(
+    count_deg_relevel(relevel_results$ref_ctrl__temperatureH),
+    count_deg_relevel(relevel_results$ref_ctrl__inoculationbmc),
+    count_deg_relevel(relevel_results$ref_ctrl__inoculationpath),
+    count_deg_relevel(relevel_results$ref_ctrl__inoculationboth),
+    count_deg_relevel(relevel_results$ref_bmc__inoculationpath),
+    count_deg_relevel(relevel_results$ref_bmc__inoculationboth),
+    count_deg_relevel(relevel_results$ref_path__inoculationboth),
+    count_deg_relevel(relevel_results$`ref_ctrl__temperatureH:inoculationbmc`),
+    count_deg_relevel(relevel_results$`ref_ctrl__temperatureH:inoculationpath`),
+    count_deg_relevel(relevel_results$`ref_ctrl__temperatureH:inoculationboth`),
+    count_deg_relevel(relevel_results$`ref_bmc__temperatureH:inoculationpath`),
+    count_deg_relevel(relevel_results$`ref_bmc__temperatureH:inoculationboth`),
+    count_deg_relevel(relevel_results$`ref_path__temperatureH:inoculationboth`)
+  ),
+  type = c(
+    rep("pairwise", 7),
+    rep("interactions", 6)
+  )
+)
+
+#
+
+## Plot the contrasts ##
+
+library(ggplot2)
+library(dplyr)
+
+# You'll need up/down counts, not just total
+count_deg_direction <- function(tbl) {
+  tbl %>%
+    filter(!is.na(qval), qval <= 0.05, abs(b) > 1) %>%
+    summarise(
+      up   =  sum(b > 1),
+      down = -sum(b < -1)  # negative so bar goes downward
+    )
+}
+
+deg_dir <- data.frame(
+  comparison = c("Ambient vs. Heat Stress", "Control vs. Cobetia", "Control vs. Vibrio",
+                 "Control vs. Both", "Cobetia vs. Vibrio", "Cobetia vs. Both",
+                 "Vibrio vs. Both", "Interaction:\nControl vs. Cobetia",
+                 "Interaction:\nControl vs. Vibrio", "Interaction:\nControl vs. Both",
+                 "Interaction:\nCobetia vs. Vibrio", "Interaction:\nCobetia vs. Both",
+                 "Interaction:\nVibrio vs. Both"),
+  rbind(count_deg_direction(relevel_results$ref_ctrl__temperatureH),
+    count_deg_direction(relevel_results$ref_ctrl__inoculationbmc),
+    count_deg_direction(relevel_results$ref_ctrl__inoculationpath),
+    count_deg_direction(relevel_results$ref_ctrl__inoculationboth),
+    count_deg_direction(relevel_results$ref_bmc__inoculationpath),
+    count_deg_direction(relevel_results$ref_bmc__inoculationboth),
+    count_deg_direction(relevel_results$ref_path__inoculationboth),
+    count_deg_direction(relevel_results$`ref_ctrl__temperatureH:inoculationbmc`),
+    count_deg_direction(relevel_results$`ref_ctrl__temperatureH:inoculationpath`),
+    count_deg_direction(relevel_results$`ref_ctrl__temperatureH:inoculationboth`),
+    count_deg_direction(relevel_results$`ref_bmc__temperatureH:inoculationpath`),
+    count_deg_direction(relevel_results$`ref_bmc__temperatureH:inoculationboth`),
+    count_deg_direction(relevel_results$`ref_path__temperatureH:inoculationboth`)))
+
+deg_dir$comparison <- factor(deg_dir$comparison, levels = deg_dir$comparison)
+write.table(deg_dir, "deg_numbers_contrasts.txt", quote = FALSE, sep = '\t', row.names=FALSE, col.names = TRUE)
+
+deg_long <- deg_dir %>%
+  tidyr::pivot_longer(cols = c(up, down), names_to = "direction", values_to = "count")
+
+p <- ggplot(deg_long, aes(x = comparison, y = count, fill = direction)) +
+  geom_bar(stat = "identity", width = 0.7, alpha = 0.85) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+  scale_fill_manual(values = c("up" = "#2e4057", "down" = "#edae49"), name = NULL,
+                    labels = c("up" = "Upregulated", "down" = "Downregulated"),
+                    limits = c("up", "down")) +
+  scale_y_continuous(labels = function(x) abs(x), breaks = seq(-1250, 1000, 250)) +
+  labs(x = NULL, y = "Number of DEGs") +
+  theme_bw() +
+  theme(axis.line = element_line(colour = "black"), panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(), panel.border = element_blank(),
+    axis.text.x = element_text(size = 11, family = "sans", colour = "black", angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 12, family = "sans", colour = "black"),
+    axis.title = element_text(size = 13, family = "sans", colour = "black"),
+    legend.text = element_text(size = 12, family = "sans", colour = "black"),
+    legend.title = element_text(size = 12, family = "sans", colour = "black"),
+    legend.position = "right")
+p
+
+ggsave("DEG_counts.pdf", plot = p, height = 6, width = 12)
+
+#
+                  
 ## Pairwise comparisons to be used for volcano plots
                   
 library(tidyr)
